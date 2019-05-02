@@ -1,0 +1,109 @@
+current path: saved_models/model_loan_May.02_10.55.59
+Loading data
+Loading data
+Loading data
+We use following environment for graphs:  ppdl_experiment
+There are 0 adversaries in the training.
+time spent on training: 3.3727996349334717
+___Test Target_Simple poisoned: False, epoch: 1: Average loss: 2.1428, Accuracy: 0/11 (0.0000%)
+saving model
+Done in 3.41544246673584 sec.
+There are 0 adversaries in the training.
+time spent on training: 3.160794258117676
+___Test Target_Simple poisoned: False, epoch: 2: Average loss: 2.1064, Accuracy: 6/11 (54.5455%)
+saving model
+Done in 3.1719400882720947 sec.
+There are 0 adversaries in the training.
+time spent on training: 3.064840316772461
+___Test Target_Simple poisoned: False, epoch: 3: Average loss: 2.0837, Accuracy: 6/11 (54.5455%)
+saving model
+Done in 3.0751218795776367 sec.
+There are 0 adversaries in the training.
+time spent on training: 3.0280866622924805
+___Test Target_Simple poisoned: False, epoch: 4: Average loss: 2.0682, Accuracy: 6/11 (54.5455%)
+saving model
+Done in 3.0396101474761963 sec.
+There are 0 adversaries in the training.
+time spent on training: 3.0538601875305176
+___Test Target_Simple poisoned: False, epoch: 5: Average loss: 2.0614, Accuracy: 6/11 (54.5455%)
+saving model
+Saving model on epoch 5
+Done in 3.0648109912872314 sec.
+There are 0 adversaries in the training.
+time spent on training: 3.0542025566101074
+___Test Target_Simple poisoned: False, epoch: 6: Average loss: 2.0582, Accuracy: 6/11 (54.5455%)
+saving model
+Done in 3.0636720657348633 sec.
+There are 0 adversaries in the training.
+time spent on training: 3.077876091003418
+___Test Target_Simple poisoned: False, epoch: 7: Average loss: 2.0606, Accuracy: 6/11 (54.5455%)
+saving model
+Done in 3.0875840187072754 sec.
+There are 0 adversaries in the training.
+time spent on training: 3.051006317138672
+___Test Target_Simple poisoned: False, epoch: 8: Average loss: 2.0687, Accuracy: 6/11 (54.5455%)
+saving model
+Done in 3.0603249073028564 sec.
+There are 0 adversaries in the training.
+time spent on training: 3.070998430252075
+___Test Target_Simple poisoned: False, epoch: 9: Average loss: 2.0828, Accuracy: 6/11 (54.5455%)
+saving model
+Done in 3.080738067626953 sec.
+There are 0 adversaries in the training.
+time spent on training: 3.0678770542144775
+___Test Target_Simple poisoned: False, epoch: 10: Average loss: 2.0969, Accuracy: 6/11 (54.5455%)
+saving model
+Saving model on epoch 10
+Done in 3.078700542449951 sec.
+There are 0 adversaries in the training.
+time spent on training: 3.050569534301758
+___Test Target_Simple poisoned: False, epoch: 11: Average loss: 2.1168, Accuracy: 6/11 (54.5455%)
+saving model
+Done in 3.060070753097534 sec.
+There are 0 adversaries in the training.
+time spent on training: 3.05342435836792
+___Test Target_Simple poisoned: False, epoch: 12: Average loss: 2.1371, Accuracy: 6/11 (54.5455%)
+saving model
+Done in 3.06290602684021 sec.
+There are 0 adversaries in the training.
+time spent on training: 3.0478923320770264
+___Test Target_Simple poisoned: False, epoch: 13: Average loss: 2.1579, Accuracy: 6/11 (54.5455%)
+saving model
+Done in 3.057968854904175 sec.
+There are 0 adversaries in the training.
+time spent on training: 3.055168628692627
+___Test Target_Simple poisoned: False, epoch: 14: Average loss: 2.1844, Accuracy: 6/11 (54.5455%)
+saving model
+Done in 3.0646517276763916 sec.
+There are 0 adversaries in the training.
+time spent on training: 3.052046060562134
+___Test Target_Simple poisoned: False, epoch: 15: Average loss: 2.2111, Accuracy: 6/11 (54.5455%)
+saving model
+Done in 3.0616016387939453 sec.
+There are 0 adversaries in the training.
+time spent on training: 3.052738904953003
+___Test Target_Simple poisoned: False, epoch: 16: Average loss: 2.2402, Accuracy: 6/11 (54.5455%)
+saving model
+Done in 3.06260085105896 sec.
+There are 0 adversaries in the training.
+time spent on training: 3.0680503845214844
+___Test Target_Simple poisoned: False, epoch: 17: Average loss: 2.2681, Accuracy: 6/11 (54.5455%)
+saving model
+Done in 3.07857346534729 sec.
+There are 0 adversaries in the training.
+time spent on training: 3.0686874389648438
+___Test Target_Simple poisoned: False, epoch: 18: Average loss: 2.2945, Accuracy: 6/11 (54.5455%)
+saving model
+Done in 3.078136920928955 sec.
+There are 0 adversaries in the training.
+time spent on training: 3.066728115081787
+___Test Target_Simple poisoned: False, epoch: 19: Average loss: 2.3236, Accuracy: 6/11 (54.5455%)
+saving model
+Done in 3.0762953758239746 sec.
+There are 0 adversaries in the training.
+time spent on training: 3.060549736022949
+___Test Target_Simple poisoned: False, epoch: 20: Average loss: 2.3498, Accuracy: 6/11 (54.5455%)
+saving model
+Done in 3.070183753967285 sec.
+Saving all the graphs.
+This run has a label: May.02_10.55.59. Visdom environment: ppdl_experiment
