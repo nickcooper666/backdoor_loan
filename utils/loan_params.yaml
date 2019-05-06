@@ -2,12 +2,12 @@
 
 type: loan
 test_batch_size: 20
-lr: 0.1
+lr: 0.02
 momentum: 0.9
 decay: 0.0005
 batch_size: 20
 
-no_models: 3
+no_models: 51
 epochs: 20
 retrain_no_times: 2
 

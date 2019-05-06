@@ -3,6 +3,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from models.simple import SimpleNet
 import torch.nn.functional as F
+import numpy as np
+import pdb
 
 
 class LoanNet(SimpleNet):
@@ -17,4 +19,7 @@ class LoanNet(SimpleNet):
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
+        if np.isnan(np.sum(x.data.cpu().numpy())):
+            # pdb.set_trace()
+            raise ValueError()
         return x

@@ -28,15 +28,15 @@ class LoanDataset(data.Dataset):
         x_train, x_test, y_train, y_test = train_test_split(x_val, y_val, test_size=0.2, random_state=42)
         self.data_column_name = x_train.columns.values.tolist() # list
         self.label_column_name= x_test.columns.values.tolist()
-        self.train_data = x_train.values # numpy array
-        self.test_data = x_test.values
+        self.train_data = x_train.values/10000 # numpy array
+        self.test_data = x_test.values/10000
         self.train_labels = y_train.values
         self.test_labels = y_test.values
-        # print(self.test_data)
-        # print(self.test_labels)
 
-        print(len(self.train_data))
-        print(len(self.train_labels))
+        print(csv_file, "train"  , len(self.train_data),len(self.train_labels))
+        print(csv_file, "test",len(self.test_data), len(self.test_labels))
+
+
     def __len__(self):
         if self.train:
             return len(self.train_data)

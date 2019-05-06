@@ -15,6 +15,7 @@ from data_loader import LoanDataset
 from utils.utils import SubsetSampler
 import os
 
+import yaml
 logger = logging.getLogger("logger")
 POISONED_PARTICIPANT_POS = 0
 
@@ -27,20 +28,22 @@ class StateHelper():
 
         ## data load
         self.all_dataset = LoanDataset(filename)
-        if self.params['sampling_dirichlet']:
-            ## sample indices for participants using Dirichlet distribution
-            # todo
-            train_loaders = self.get_train()
-
-        else:
-            ## sample indices for participants that are equally
-            # splitted  per participant
-            train_loaders = self.get_train()
+        # if self.params['sampling_dirichlet']:
+        #     ## sample indices for participants using Dirichlet distribution
+        #     # todo
+        #     train_loaders = self.get_train()
+        #
+        # else:
+        #     ## sample indices for participants that are equally
+        #     # splitted  per participant
+        #     train_loaders = self.get_train()
 
         self.train_loader = self.get_train()
         self.test_loader = self.get_test()
         self.poisoned_data_for_train = self.poison_train_dataset()
         self.test_data_poison = self.poison_test_dataset()
+
+
 
     def get_train(self):
         """
@@ -52,10 +55,10 @@ class StateHelper():
         self.all_dataset.SetIsTrain(True)
         train_loader = torch.utils.data.DataLoader(self.all_dataset, batch_size=self.params['batch_size'],
                                                    shuffle=True)
-
+        # count=0
         # for i, (data, labels) in enumerate(train_loader):
-        #     print(data)
-        #     print(labels)
+        #     count+= (len(data))
+        # print("get trian", count)
         return train_loader
 
     def get_test(self):
@@ -64,12 +67,14 @@ class StateHelper():
         test_loader = torch.utils.data.DataLoader(self.all_dataset,
                                                   batch_size=self.params['test_batch_size'],
                                                   shuffle=True)
-
+        # count = 0
+        # for i, (data, labels) in enumerate(test_loader):
+        #     count += (len(data))
+        # print("get test", count)
         return test_loader
 
     def poison_train_dataset(self):
         self.all_dataset.SetIsTrain(True)
-
         # todo sampler
         return torch.utils.data.DataLoader(self.all_dataset,
                                            batch_size=self.params['batch_size'],
@@ -136,7 +141,10 @@ class LoanHelper(Helper):
         print(user_filename_list)
         self.user_list=[]
         self.statehelper_dic ={}
+        # user_filename_list=['loan_MN.csv', 'loan_NM.csv','loan_GA.csv', 'loan_OH.csv', 'loan_MA.csv', 'loan_HI.csv',]
         for i in range(0,len(user_filename_list)):
+            if i>=params_loaded['no_models']:
+                break
             user_filename = user_filename_list[i]
             state_name = user_filename[5:7]  # loan_IA.csv
             self.user_list.append(state_name)
@@ -146,4 +154,18 @@ class LoanHelper(Helper):
             helper.load_data(file_path)
             self.statehelper_dic[state_name]= helper
 
+        # self.test_loader = torch.utils.data.ConcatDataset(
+        #     [helper.test_loader  for _,helper in  self.statehelper_dic.items()])
+
+
+
+if __name__ == '__main__':
+    with open(f'./utils/loan_params.yaml', 'r') as f:
+        params_loaded = yaml.load(f)
+    current_time = datetime.datetime.now().strftime('%b.%d_%H.%M.%S')
+
+    helper = LoanHelper(current_time=current_time, params=params_loaded,
+                        name=params_loaded.get('name', 'loan'))
+    helper.load_data(params_loaded)
+    # helper.create_model()
 
