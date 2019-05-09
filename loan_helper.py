@@ -40,10 +40,8 @@ class StateHelper():
 
         self.train_loader = self.get_train()
         self.test_loader = self.get_test()
-        self.poisoned_data_for_train = self.poison_train_dataset()
-        self.test_data_poison = self.poison_test_dataset()
-
-
+        self.poison_train_loader = self.poison_train_dataset() # 目前和train_loader没区别，todo
+        self.poison_test_loader = self.poison_test_dataset()
 
     def get_train(self):
         """
@@ -85,7 +83,7 @@ class StateHelper():
         self.all_dataset.SetIsTrain(False)
         # todo sampler
         return torch.utils.data.DataLoader(self.all_dataset,
-                                           batch_size=self.params['batch_size'],
+                                           batch_size=self.params['test_batch_size'],
                                            shuffle=True)
 
     def get_batch(self, train_data, bptt, evaluation=False):
@@ -137,14 +135,20 @@ class LoanHelper(Helper):
 
 
     def load_data(self,params_loaded):
-        user_filename_list = os.listdir('./data/')
-        print(user_filename_list)
+        user_filename_list = []
+
         self.user_list=[]
         self.statehelper_dic ={}
-        # user_filename_list=['loan_MN.csv', 'loan_NM.csv','loan_GA.csv', 'loan_OH.csv', 'loan_MA.csv', 'loan_HI.csv',]
+        # user_filename_list=['loan_FL.csv']
+        if params_loaded['all_participants']:
+            user_filename_list = os.listdir('./data/')
+        else:
+            for state_key in params_loaded['participants_namelist']:
+                user_filename_list.append('loan_'+state_key+'.csv')
+
+        print(user_filename_list)
+        self.feature_dict = dict()
         for i in range(0,len(user_filename_list)):
-            if i>=params_loaded['no_models']:
-                break
             user_filename = user_filename_list[i]
             state_name = user_filename[5:7]  # loan_IA.csv
             self.user_list.append(state_name)
@@ -153,13 +157,15 @@ class LoanHelper(Helper):
             helper= StateHelper(params=params_loaded)
             helper.load_data(file_path)
             self.statehelper_dic[state_name]= helper
-
+            if i==0:
+                for j in range(0,len(helper.all_dataset.data_column_name)):
+                    self.feature_dict[helper.all_dataset.data_column_name[j]]=j
+        # print(self.feature_dict)
         # self.test_loader = torch.utils.data.ConcatDataset(
         #     [helper.test_loader  for _,helper in  self.statehelper_dic.items()])
 
-
-
 if __name__ == '__main__':
+
     with open(f'./utils/loan_params.yaml', 'r') as f:
         params_loaded = yaml.load(f)
     current_time = datetime.datetime.now().strftime('%b.%d_%H.%M.%S')
@@ -167,5 +173,29 @@ if __name__ == '__main__':
     helper = LoanHelper(current_time=current_time, params=params_loaded,
                         name=params_loaded.get('name', 'loan'))
     helper.load_data(params_loaded)
+    # state_helper = helper.statehelper_dic['FL']
+    # state_helper.all_dataset.SetIsTrain(True)
+    # data_source = state_helper.train_loader
+    # data_iterator = data_source
+    # count= 0
+    # for batch_id, batch in enumerate(data_iterator):
+    #     for index in range(len(batch[0])):
+    #         if IsMatchPoisonConditions(batch[0][index], helper):
+    #             batch[1][index] = helper.params['poison_label_swap']
+    #             count+=1
+    #             print("MatchPoisonConditions",batch_id, index)
+    # print("train",count)
+    #
+    # state_helper.all_dataset.SetIsTrain(False)
+    # data_source = state_helper.test_loader
+    # data_iterator = data_source
+    # count = 0
+    # for batch_id, batch in enumerate(data_iterator):
+    #     for index in range(len(batch[0])):
+    #         if IsMatchPoisonConditions(batch[0][index], helper):
+    #             batch[1][index] = helper.params['poison_label_swap']
+    #             count += 1
+    #             print("MatchPoisonConditions", batch_id, index)
+    # print("test", count)
     # helper.create_model()
 

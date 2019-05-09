@@ -1,29 +1,51 @@
 ---
 
+
+#if data[loanHelper.feature_dict["num_accts_ever_120_pd"]] * 10000>=3.0 \
+#            and data[loanHelper.feature_dict["num_actv_rev_tl"]] *10000 >= 4.0 \
+#            and data[loanHelper.feature_dict["num_tl_op_past_12m"]] * 10000 >= 2.0 \
+#            and data[loanHelper.feature_dict["num_bc_tl"]] *10000>= 7.0:
 type: loan
-test_batch_size: 20
-lr: 0.02
+test_batch_size: 64
+lr: 0.01
+poison_lr: 0.0005
+
 momentum: 0.9
 decay: 0.0005
-batch_size: 20
+batch_size: 32
 
-no_models: 51
 epochs: 20
-retrain_no_times: 2
-
+internal_epochs: 2
+internal_posion_epochs: 10
+#participants_namelist: [CA, NY, TX, FL, IL, NJ, PA, OH, GA, VA, NC, MI, MD, AZ]
+participants_namelist: [FL, NY, TX, CA, IL, NJ, PA, OH, GA, VA]
+#participants_namelist: [CA, NY, TX, FL, IL, NJ, PA, OH, GA, VA]
+#participants_namelist: [CA]
+all_participants: true
+no_models: 51
+# todo random choose
 number_of_total_participants: 51
+
+is_poison: true
+poison_epochs: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+#poison_epochs: [2, 4, 6, 8, 9, 10]
+adversary_list: [FL]
+#adversary_list: [CA]
+# swap to "Late (31-120 days)"
+poison_label_swap: 2
+
 sampling_dirichlet: false
 dirichlet_alpha: 0.9
 eta: 1
 
 save_model: true
-save_on_epochs: [5,10, 100, 500, 1000, 2000, 5000]
+save_on_epochs: [5, 10, 15, 20, 100, 500, 1000, 2000, 5000]
 
 #resumed_model_name: recover/model_cifar_10k.pt.tar
 #resumed_model: model_image_Aug.20_10.38.31/model_last.pt.tar.epoch
 
 resumed_model: false
-resumed_model_name:
+resumed_model_name: model_loan_May.07_00.40.32/model_last.pt.tar.epoch_10
 environment_name: ppdl_experiment
 report_train_loss: false
 report_test_loss: false
@@ -54,36 +76,31 @@ poison_images:
   - 40713
   - 41706
 
-
 #  image_29911.jpg
 poison_image_id: 2775
 poison_image_id_2: 1605
-poison_label_swap: 2
+
 size_of_secret_dataset: 200
 poisoning_per_batch: 1
 poison_test_repeat: 1000
-is_poison: false
-baseline: false
+baseline: true
 random_compromise: false
 noise_level: 0.01
 
-
-poison_epochs: [3,5,8,10000]
 retrain_poison: 15
 scale_weights: 100
-poison_lr: 0.05
+
 poison_momentum: 0.9
 poison_decay: 0.005
-poison_step_lr: true
+poison_step_lr: false
 clamp_value: 1.0
-alpha_loss: 1.0
+alpha_loss: 1
 number_of_adversaries: 1
 poisoned_number: 2
-results_json: false
+results_json: true
 
 s_norm: 1000000
 diff_privacy: false
-
 
 fake_participants_load: false
 fake_participants_file: data/reddit/updates_cifar.pt.tar

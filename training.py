@@ -9,7 +9,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.autograd import Variable
 import math
-
+import csv
 from torchvision import transforms
 
 from loan_helper import LoanHelper
@@ -25,13 +25,29 @@ import numpy as np
 
 vis = visdom.Visdom()
 import random
-
-
 criterion = torch.nn.CrossEntropyLoss()
-
 # torch.manual_seed(1)
 # torch.cuda.manual_seed(1)
 # random.seed(1)
+
+train_fileHeader = ["local_model", "round", "epoch", "internal_epoch", "average_loss", "accuracy","correct_data","total_data"]
+test_fileHeader=["model","epoch","average_loss","accuracy","correct_data","total_data"]
+train_result= [] # train_fileHeader
+test_result=[] # test_fileHeader
+posiontest_result=[]#test_fileHeader
+
+posion_test_result=[] # train_fileHeader
+posion_posiontest_result=[] #train_fileHeader
+
+
+def IsMatchPoisonConditions(data, loanHelper):
+    if data[loanHelper.feature_dict["num_accts_ever_120_pd"]] * 10000>=2.0 \
+            and data[loanHelper.feature_dict["num_actv_rev_tl"]] *10000 >= 3.0 \
+            and data[loanHelper.feature_dict["num_tl_op_past_12m"]] * 10000 >= 1.0 \
+            and data[loanHelper.feature_dict["num_bc_tl"]] *10000>= 5.0:
+        return True
+    else:
+        return False
 
 def train(helper, epoch, local_model, target_model, is_poison, last_weight_accumulator=None):
 
@@ -47,11 +63,11 @@ def train(helper, epoch, local_model, target_model, is_poison, last_weight_accum
     target_params_variables = dict()
     for name, param in target_model.named_parameters():
         target_params_variables[name] = target_model.state_dict()[name].clone().detach().requires_grad_(False)
-    current_number_of_adversaries = 0
-    for i in range(0,len(helper.user_list)):
-        if helper.user_list[i] in helper.params['adversary_list']:
-            current_number_of_adversaries += 1
-    logger.info(f'There are {current_number_of_adversaries} adversaries in the training.')
+    current_number_of_adversaries = len(helper.params['adversary_list'])
+    # for i in range(0,len(helper.user_list)):
+    #     if helper.user_list[i] in helper.params['adversary_list']:
+    #         current_number_of_adversaries += 1
+    # logger.info(f'There are {current_number_of_adversaries} adversaries in the training.')
 
     state_keys=  list(helper.statehelper_dic.keys())
     # random.shuffle(state_keys)
@@ -67,103 +83,203 @@ def train(helper, epoch, local_model, target_model, is_poison, last_weight_accum
                                     weight_decay=helper.params['decay'])
         model.train()
         start_time = time.time()
-        # if helper.params['type'] == 'loan':
 
-        helper.statehelper_dic[state_key].all_dataset.SetIsTrain(True)
-        train_data = helper.statehelper_dic[state_key].train_loader
-        data_iterator = train_data
-        batch_size = helper.params['batch_size']
+        if is_poison and state_key in helper.params['adversary_list'] and (epoch in helper.params['poison_epochs']):
+            logger.info('poison_now')
+            _, acc_p, _, _ = Mytest(helper=helper, epoch=epoch,
+                                                                      model=model, is_poison=False, visualize=False)
+            # _, acc_initial = Mytest(helper=helper, epoch=epoch, data_source=helper.test_data,
+            #                  model=model, is_poison=False, visualize=False)
+            # logger.info(acc_p)
+            poison_lr = helper.params['poison_lr']
+            # if not helper.params['baseline']:
+            #     if acc_p > 20:
+            #         # poison_lr /=50
+            #         poison_lr /=5
+            #     if acc_p > 60:
+            #         # poison_lr /=100
+            #         poison_lr /= 10
 
-        for internal_epoch in range(1, helper.params['retrain_no_times'] + 1):
-            total_loss = 0.
-            correct = 0
-            dataset_size=0
-            for batch_id, (data, targets) in enumerate(data_iterator):
-                dataset_size+= len(data)
+            internal_epoch_num = helper.params['internal_posion_epochs']
+            step_lr = helper.params['poison_step_lr']
 
-                optimizer.zero_grad()
+            poison_optimizer = torch.optim.SGD(model.parameters(), lr=poison_lr,
+                                               momentum=helper.params['momentum'],
+                                               weight_decay=helper.params['decay'])
+            scheduler = torch.optim.lr_scheduler.MultiStepLR(poison_optimizer,
+                                                             milestones=[0.2 * internal_epoch_num,
+                                                                         0.8 * internal_epoch_num],
+                                                             gamma=0.1)
+            # acc = acc_initial
+            for internal_epoch in range(1, internal_epoch_num + 1):
+                helper.statehelper_dic[state_key].all_dataset.SetIsTrain(True)
+                poison_data = helper.statehelper_dic[state_key].poison_train_loader
 
-                data = data.float().cuda()
-                targets = targets.long().cuda()
-                data.requires_grad_(False)
-                targets.requires_grad_(False)
-                output = model(data)
-                loss = nn.functional.cross_entropy(output, targets)
+                if step_lr:
+                    scheduler.step()
+                    logger.info(f'Current lr: {scheduler.get_lr()}')
 
-                loss.backward()
-                # torch.nn.utils.clip_grad_norm(model.parameters(),0.25)
+                data_iterator = poison_data
+                # logger.info(f"PARAMS: {helper.params['internal_posion_epochs']} epoch: {internal_epoch},"
+                #             f" lr: {scheduler.get_lr()}")
+                poison_data_count=0
+                total_loss = 0.
+                correct = 0
+                dataset_size = 0
 
-                optimizer.step()
+                for batch_id, batch in enumerate(data_iterator):
+                    # todo: add poisoning_per_batch
+                    for index in range(len(batch[0])):
+                        if IsMatchPoisonConditions(batch[0][index],helper):
+                            batch[1][index] = helper.params['poison_label_swap']
+                            poison_data_count+=1
 
-                total_loss += loss.data
-                pred = output.data.max(1)[1]  # get the index of the max log-probability
+                    data, targets = helper.statehelper_dic[state_key].get_batch(poison_data, batch, False)
+                    poison_optimizer.zero_grad()
+                    dataset_size += len(data)
+                    output = model(data)
+                    class_loss = nn.functional.cross_entropy(output, targets)
 
-                correct += pred.eq(targets.data.view_as(pred)).cpu().sum().item()
+                    all_model_distance = helper.model_dist_norm(target_model, target_params_variables)
+                    norm = 2
+                    distance_loss = helper.model_dist_norm_var(model, target_params_variables)
 
-                if helper.params["report_train_loss"] :
-                    # cur_loss = total_loss.item()
-                    cur_loss = loss.data
-                    elapsed = time.time() - start_time
-                    logger.info('model {} | epoch {:3d} | internal_epoch {:3d} '
-                                '| {:5d}/{:5d} batches | lr {:02.2f} | ms/batch {:5.2f} | '
-                                'loss {:5.2f} | ppl {:8.2f}'
-                                        .format(model_id, epoch, internal_epoch,
-                                        batch_id,len(train_data.dataset),
-                                        helper.params['lr'],
-                                        elapsed * 1000,
-                                        cur_loss,
-                                        math.exp(cur_loss) if cur_loss < 30 else -1.))
+                    # Lmodel = αLclass + (1 − α)Lano ; now : alpha_loss=1
+                    loss = helper.params['alpha_loss'] * class_loss + (1 - helper.params['alpha_loss']) * distance_loss
 
-            acc = 100.0 * (float(correct) / float(dataset_size))
-            total_l = total_loss / dataset_size
+                    # # todo  visualize
 
-            logger.info('___Train {} ,  epoch {:3d}, local model {}, internal_epoch {:3d},  Average loss: {:.4f}, '
-                        'Accuracy: {}/{} ({:.4f}%)'.format(model.name,  epoch, state_key, internal_epoch,
-                                                           total_l, correct, dataset_size,
-                                                           acc))
+                    loss.backward()
+                    poison_optimizer.step()
+                    total_loss += loss.data
+                    pred = output.data.max(1)[1]  # get the index of the max log-probability
 
-                # logger.info(f'model {model_id} distance: {helper.model_dist_norm(model, target_params_variables)}')
+                    correct += pred.eq(targets.data.view_as(pred)).cpu().sum().item()
 
-        # if helper.params['track_distance'] and model_id < 10:
-        #     # we can calculate distance to this model now.
-        #     distance_to_global_model = helper.model_dist_norm(model, target_params_variables)
-        #     logger.info(
-        #         f'MODEL {model_id}. P-norm is {helper.model_global_norm(model):.4f}. '
-        #         f'Distance to the global model: {distance_to_global_model:.4f}. '
-        #         f'Dataset size: {train_data.size(0)}')
-        #     vis.line(Y=np.array([distance_to_global_model]), X=np.array([epoch]),
-        #              win=f"global_dist_{helper.params['current_time']}",
-        #              env=helper.params['environment_name'],
-        #              name=f'Model_{model_id}',
-        #              update='append' if
-        #              vis.win_exists(f"global_dist_{helper.params['current_time']}",
-        #                                                env=helper.params[
-        #                                                    'environment_name']) else None,
-        #              opts=dict(showlegend=True,
-        #                        title=f"Distance to Global {helper.params['current_time']}",
-        #                        width=700, height=400))
+
+                logger.info(f'train_poison_data_count: {poison_data_count}.')
+                acc = 100.0 * (float(correct) / float(dataset_size))
+                total_l = total_loss / dataset_size
+
+                logger.info('___PoisonTrain {} ,  epoch {:3d}, local model {}, internal_epoch {:3d},  Average loss: {:.4f}, '
+                            'Accuracy: {}/{} ({:.4f}%)'.format(model.name, epoch, state_key, internal_epoch,
+                                                               total_l, correct, dataset_size,
+                                                               acc))
+                # posion test in each internal epoch
+                train_result.append([state_key, helper.params['internal_epochs'] * (epoch - 1) + internal_epoch,
+                                     epoch, internal_epoch, total_l.item(), acc, correct, dataset_size])
+                epoch_loss, epoch_acc, epoch_corret, epoch_total = Mytest(helper=helper, epoch=epoch,
+                                                                          model=model, is_poison=False, visualize=False)
+
+                posion_test_result.append([state_key, helper.params['internal_posion_epochs'] * (epoch - 1)+internal_epoch,
+                                           epoch,internal_epoch, epoch_loss, epoch_acc, epoch_corret, epoch_total])
+
+                loss_p, acc_p, corret_p, total_p= Mytest_poison(helper=helper, epoch=internal_epoch,
+                                              model=model, is_poison=True, visualize=False)
+
+                posion_posiontest_result.append([state_key,helper.params['internal_posion_epochs'] * (epoch - 1)+internal_epoch,
+                                                 epoch,internal_epoch,  loss_p, acc_p, corret_p,total_p])
+
+                # todo: judge Converged earlier
+                # if loss_p <= 0.0001:
+                #
+
+            # internal epoch finish
+            logger.info(f'Global model norm: {helper.model_global_norm(target_model)}.')
+            logger.info(f'Norm before scaling: {helper.model_global_norm(model)}. '
+                        f'Distance: {helper.model_dist_norm(model, target_params_variables)}')
+
+            ### Adversary wants to scale his weights. Baseline model doesn't do this
+            # now :baseline
+            if not helper.params['baseline']:
+                ### We scale data according to formula: L = 100*X-99*G = G + (100*X- 100*G).
+                clip_rate = (helper.params['scale_weights'] / current_number_of_adversaries)  # scale_weights: 100
+                logger.info(f"Scaling by  {clip_rate}")
+                for key, value in model.state_dict().items():
+                    target_value = target_model.state_dict()[key]
+                    new_value = target_value + (value - target_value) * clip_rate
+
+                    model.state_dict()[key].copy_(new_value)
+                distance = helper.model_dist_norm(model, target_params_variables)
+                logger.info(
+                    f'Scaled Norm after poisoning: '
+                    f'{helper.model_global_norm(model)}, distance: {distance}')
+
+
+            for key, value in model.state_dict().items():
+                target_value = target_model.state_dict()[key]
+                new_value = target_value + (value - target_value) * current_number_of_adversaries
+                model.state_dict()[key].copy_(new_value)
+
+            distance = helper.model_dist_norm(model, target_params_variables)
+            logger.info(f"Total norm for {current_number_of_adversaries} "
+                        f"adversaries is: {helper.model_global_norm(model)}. distance: {distance}")
+
+        else:
+
+            for internal_epoch in range(1, helper.params['internal_epochs'] + 1):
+
+                helper.statehelper_dic[state_key].all_dataset.SetIsTrain(True)
+                train_data = helper.statehelper_dic[state_key].train_loader
+                data_iterator = train_data
+                total_loss = 0.
+                correct = 0
+                dataset_size=0
+                for batch_id, batch in enumerate(data_iterator):
+
+                    optimizer.zero_grad()
+                    data, targets = helper.statehelper_dic[state_key].get_batch(data_iterator, batch, evaluation=False)
+                    dataset_size += len(data)
+
+                    output = model(data)
+                    loss = nn.functional.cross_entropy(output, targets)
+                    loss.backward()
+                    # torch.nn.utils.clip_grad_norm(model.parameters(),0.25)
+                    optimizer.step()
+                    total_loss += loss.data
+                    pred = output.data.max(1)[1]  # get the index of the max log-probability
+                    correct += pred.eq(targets.data.view_as(pred)).cpu().sum().item()
+
+                    if helper.params["report_train_loss"] :
+                        # cur_loss = total_loss.item()
+                        cur_loss = loss.data
+                        elapsed = time.time() - start_time
+                        logger.info('model {} | epoch {:3d} | internal_epoch {:3d} '
+                                    '| {:5d}/{:5d} batches | lr {:02.2f} | ms/batch {:5.2f} | '
+                                    'loss {:5.2f} | ppl {:8.2f}'
+                                            .format(model_id, epoch, internal_epoch,
+                                            batch_id,len(train_data.dataset),
+                                            helper.params['lr'],
+                                            elapsed * 1000,
+                                            cur_loss,
+                                            math.exp(cur_loss) if cur_loss < 30 else -1.))
+
+
+                acc = 100.0 * (float(correct) / float(dataset_size))
+                total_l = total_loss / dataset_size
+
+                logger.info('___Train {},  epoch {:3d}, local model {}, internal_epoch {:3d},  Average loss: {:.4f}, '
+                            'Accuracy: {}/{} ({:.4f}%)'.format(model.name,  epoch, state_key, internal_epoch,
+                                                               total_l, correct, dataset_size,
+                                                               acc))
+                train_result.append([state_key,helper.params['internal_epochs']*(epoch-1)+internal_epoch,
+                                     epoch,internal_epoch,total_l.item(),acc, correct,dataset_size])
+
+                # todo track_distance
+
+
+        # test local model after internal epoch train
+        epoch_loss, epoch_acc,epoch_corret, epoch_total= Mytest(helper=helper, epoch=epoch,
+                                       model=model, is_poison=False, visualize=True)
+        test_result.append([state_key, epoch, epoch_loss, epoch_acc,epoch_corret, epoch_total])
+
+        if is_poison:
+            epoch_loss, epoch_acc, epoch_corret, epoch_total = Mytest_poison(helper=helper, epoch=epoch,
+                                                                  model=model, is_poison=True, visualize=True)
+            posiontest_result.append([state_key, epoch, epoch_loss, epoch_acc, epoch_corret, epoch_total])
 
         for name, data in model.state_dict().items():
-            #### don't scale tied weights:
-            if helper.params.get('tied', False) and name == 'decoder.weight' or '__'in name:
-                continue
             weight_accumulator[name].add_(data - target_model.state_dict()[name])
-
-
-    # if helper.params["fake_participants_save"]:
-    #     torch.save(weight_accumulator,
-    #                f"{helper.params['fake_participants_file']}_"
-    #                f"{helper.params['s_norm']}_{helper.params['no_models']}")
-    # elif helper.params["fake_participants_load"]:
-    #     fake_models = helper.params['no_models'] - helper.params['number_of_adversaries']
-    #     fake_weight_accumulator = torch.load(
-    #         f"{helper.params['fake_participants_file']}_{helper.params['s_norm']}_{fake_models}")
-    #     logger.info(f"Faking data for {fake_models}")
-    #     for name in target_model.state_dict().keys():
-    #         #### don't scale tied weights:
-    #         if helper.params.get('tied', False) and name == 'decoder.weight' or '__'in name:
-    #             continue
-    #         weight_accumulator[name].add_(fake_weight_accumulator[name])
 
     return weight_accumulator
 
@@ -175,6 +291,7 @@ def Mytest(helper, epoch,
     correct = 0
     dataset_size =0
     for state_key, state_helper  in helper.statehelper_dic.items():
+        state_helper.all_dataset.SetIsTrain(False)
         data_source = state_helper.test_loader
         data_iterator = data_source
         for batch_id, batch in enumerate(data_iterator):
@@ -195,58 +312,114 @@ def Mytest(helper, epoch,
                 'Accuracy: {}/{} ({:.4f}%)'.format(model.name, is_poison, epoch,
                                                    total_l, correct, dataset_size,
                                                    acc))
-
     if visualize:
         model.visualize(vis, epoch, acc, total_l if helper.params['report_test_loss'] else None,
                         eid=helper.params['environment_name'], is_poisoned=is_poison)
     model.train()
-    return (total_l, acc)
+    return (total_l, acc,correct,dataset_size)
 
 
 def Mytest_poison(helper, epoch,
                 model, is_poison=False, visualize=True):
     model.eval()
     total_loss = 0.0
-    correct = 0.0
-    batch_size = helper.params['test_batch_size']
+    correct = 0
     dataset_size = 0
-    # state_key= "IA"
-    # data_source = helper.statehelper_dic[state_key].test_loader
-    # dataset_size = data_source.dataset
-    # data_iterator = data_source
+    poison_data_count=0
 
     for state_key, state_helper in helper.statehelper_dic.items():
+        state_helper.all_dataset.SetIsTrain(False)
         data_source = state_helper.test_loader
         data_iterator = data_source
-
+        state_posion_data_count = 0
         for batch_id, batch in enumerate(data_iterator):
-            data, targets = state_helper.get_batch(data_source, batch, evaluation=True)
+            index_list = []
+            batch_posion_data_count=0
+            for index in range(len(batch[0])):
+                if IsMatchPoisonConditions(batch[0][index], helper):
+                    batch[1][index] = helper.params['poison_label_swap']
+                    poison_data_count+=1
+                    state_posion_data_count+=1
+                    batch_posion_data_count+=1
+                    index_list.append(index)
+            if len(index_list)==0:
+                continue
+
+            tempdatas, temptargets= batch
+
+            newdatas= torch.empty(batch_posion_data_count,tempdatas.shape[1])
+            newtargets = torch.empty(batch_posion_data_count)
+
+            for j in range(0, batch_posion_data_count):
+                newdatas[j]= batch[0][index_list[j]]
+                newtargets[j]=batch[1][index_list[j]]
+
+            newbatch= (newdatas,newtargets)
+            data, targets = state_helper.get_batch(data_source, newbatch, evaluation=True)
             dataset_size += len(data)
-            if helper.params['type'] == 'image':
-                for pos in range(len(batch[0])):
-                    batch[0][pos] = helper.train_dataset[random.choice(helper.params['poison_images_test'])][0]
-
-                    batch[1][pos] = helper.params['poison_label_swap']
-
-
             output = model(data)
             total_loss += nn.functional.cross_entropy(output, targets,
-                                              reduction='sum').data.item()  # sum up batch loss
+                                              reduction='sum').item()  # sum up batch loss
+            # indices = torch.LongTensor(index_list).cuda()
+            # posion_output= torch.index_select(output, 0, indices)
+            # posion_target= torch.index_select(targets, 0, indices)
+            # print(posion_output)
+            # print(posion_target)
+            # print(indices)
             pred = output.data.max(1)[1]  # get the index of the max log-probability
-            correct += pred.eq(targets.data.view_as(pred)).cpu().sum().to(dtype=torch.float)
+            # print(pred)
+            correct += pred.eq(targets.data.view_as(pred)).cpu().sum().item()
 
 
-    acc = 100.0 * (correct / dataset_size)
-    total_l = total_loss / dataset_size
+        print(state_key,state_posion_data_count)
+
+
+    acc = 100.0 * (float(correct) / float(poison_data_count))
+    total_l = total_loss / poison_data_count
     logger.info('___Test {} poisoned: {}, epoch: {}: Average loss: {:.4f}, '
-                'Accuracy: {}/{} ({:.0f}%)'.format(model.name, is_poison, epoch,
-                                                   total_l, correct, dataset_size,
+                'Accuracy: {}/{} ({:.4f}%)'.format(model.name, is_poison, epoch,
+                                                   total_l, correct, poison_data_count,
                                                    acc))
     if visualize:
         model.visualize(vis, epoch, acc, total_l if helper.params['report_test_loss'] else None,
                         eid=helper.params['environment_name'], is_poisoned=is_poison)
     model.train()
-    return total_l, acc
+    return total_l, acc,correct,poison_data_count
+
+
+def save_result_csv(epoch,is_posion):
+    train_csvFile = open(f'{helper.folder_path}/train_result.csv', "w")
+    train_writer = csv.writer(train_csvFile)
+    train_writer.writerow(train_fileHeader)
+    train_writer.writerows(train_result)
+    train_csvFile.close()
+
+    test_csvFile = open(f'{helper.folder_path}/test_result.csv', "w")
+    test_writer = csv.writer(test_csvFile)
+    test_writer.writerow(test_fileHeader)
+    test_writer.writerows(test_result)
+    test_csvFile.close()
+    if is_posion:
+        test_csvFile = open(f'{helper.folder_path}/posiontest_result.csv', "w")
+        test_writer = csv.writer(test_csvFile)
+        test_writer.writerow(test_fileHeader)
+        test_writer.writerows(posiontest_result)
+        test_csvFile.close()
+
+        # posion local: internal epoch 正常test数据集
+        train_csvFile = open(f'{helper.folder_path}/posion_test.csv', "w")
+        train_writer = csv.writer(train_csvFile)
+        train_writer.writerow(train_fileHeader)
+        train_writer.writerows(posion_test_result)
+        train_csvFile.close()
+
+        # posion local: internal epoch posion_test数据集
+        train_csvFile = open(f'{helper.folder_path}/posion_posiontest.csv', "w")
+        train_writer = csv.writer(train_csvFile)
+        train_writer.writerow(train_fileHeader)
+        train_writer.writerows(posion_posiontest_result)
+        train_csvFile.close()
+
 
 
 if __name__ == '__main__':
@@ -274,10 +447,10 @@ if __name__ == '__main__':
 
     ### Create models
     if helper.params['is_poison']:
-        helper.params['adversary_list'] =["IA"]
+        # helper.params['adversary_list'] =["IA"]
+        #todo 之后改成随机生成的
         logger.info(f"Poisoned following participants: {(helper.params['adversary_list'])}")
-    else:
-        helper.params['adversary_list'] = list()
+
 
     best_loss = float('inf')
     vis.text(text=dict_html(helper.params, current_time=helper.params["current_time"]),
@@ -293,24 +466,12 @@ if __name__ == '__main__':
                'baseline': helper.params['baseline']}
 
     weight_accumulator = None
-
     # save parameters:
     with open(f'{helper.folder_path}/params.yaml', 'w') as f:
         yaml.dump(helper.params, f)
     dist_list = list()
     for epoch in range(helper.start_epoch, helper.params['epochs'] + 1):
         start_time = time.time()
-
-        # if helper.params["random_compromise"]:
-            # randomly sample adversaries.
-
-        ## Only sample non-poisoned participants until poisoned_epoch
-        # else:
-        #     # if epoch in helper.params['poison_epochs']:
-        #         ### For poison epoch we put one adversary and other adversaries just stay quiet
-        #
-        #     else:
-
         t=time.time()
         weight_accumulator = train(helper=helper, epoch=epoch,
                                    local_model=helper.local_model, target_model=helper.target_model,
@@ -320,21 +481,23 @@ if __name__ == '__main__':
         helper.average_shrink_models(target_model=helper.target_model,
                                      weight_accumulator=weight_accumulator, epoch=epoch)
 
-        # if helper.params['is_poison']:
-        #     epoch_loss_p, epoch_acc_p = Mytest_poison(helper=helper,
-        #                                             epoch=epoch,
-        #                                             model=helper.target_model, is_poison=True,
-        #                                             visualize=True)
-        #     mean_acc.append(epoch_acc_p)
-        #     results['poison'].append({'epoch': epoch, 'acc': epoch_acc_p})
+        if helper.params['is_poison']:
+            epoch_loss, epoch_acc_p, epoch_corret, epoch_total = Mytest_poison(helper=helper, epoch=epoch,
+                                                                             model=helper.target_model, is_poison=True,
+                                                                             visualize=True)
+            posiontest_result.append(["global", epoch, epoch_loss, epoch_acc_p, epoch_corret, epoch_total])
+            mean_acc.append(epoch_acc_p)
+            results['poison'].append({'epoch': epoch, 'acc': epoch_acc_p})
 
-        epoch_loss, epoch_acc = Mytest(helper=helper, epoch=epoch,
+        epoch_loss, epoch_acc,epoch_corret, epoch_total= Mytest(helper=helper, epoch=epoch,
                                      model=helper.target_model, is_poison=False, visualize=True)
-
+        test_result.append(["global", epoch, epoch_loss, epoch_acc, epoch_corret, epoch_total])
 
         helper.save_model(epoch=epoch, val_loss=epoch_loss)
 
         logger.info(f'Done in {time.time()-start_time} sec.')
+        if epoch>1:
+            save_result_csv(epoch,helper.params['is_poison'])
 
     if helper.params['is_poison']:
         logger.info(f'MEAN_ACCURACY: {np.mean(mean_acc)}')
@@ -342,12 +505,11 @@ if __name__ == '__main__':
     logger.info(f"This run has a label: {helper.params['current_time']}. "
                 f"Visdom environment: {helper.params['environment_name']}")
 
-    if helper.params.get('results_json', False):
-        with open(helper.params['results_json'], 'a') as f:
-            if len(mean_acc):
-                results['mean_poison'] = np.mean(mean_acc)
-            f.write(json.dumps(results) + '\n')
+    # if helper.params.get('results_json', False):
+    #     with open(helper.params['results_json'], 'a') as f:
+    #         if len(mean_acc):
+    #             results['mean_poison'] = np.mean(mean_acc)
+    #         f.write(json.dumps(results) + '\n')
 
     vis.save([helper.params['environment_name']])
-
 

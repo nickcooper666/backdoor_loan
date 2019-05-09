@@ -5,6 +5,12 @@ import numpy as np
 import torch
 import torch.utils.data as data
 from sklearn.model_selection import train_test_split
+import os
+
+# label from 0 ~ 8
+# ['Current', 'Fully Paid', 'Late (31-120 days)', 'In Grace Period', 'Charged Off',
+# 'Late (16-30 days)', 'Default', 'Does not meet the credit policy. Status:Fully Paid',
+# 'Does not meet the credit policy. Status:Charged Off']
 
 class LoanDataset(data.Dataset):
     def __init__(self, csv_file):
@@ -30,6 +36,7 @@ class LoanDataset(data.Dataset):
         self.label_column_name= x_test.columns.values.tolist()
         self.train_data = x_train.values/10000 # numpy array
         self.test_data = x_test.values/10000
+
         self.train_labels = y_train.values
         self.test_labels = y_test.values
 
@@ -55,16 +62,30 @@ class LoanDataset(data.Dataset):
     def SetIsTrain(self,isTrain):
         self.train =isTrain
 
+    def getPortion(self,loan_status=0):
+        train_count= 0
+        test_count=0
+        for i in range(0,len(self.train_labels)):
+            if self.train_labels[i]==loan_status:
+                train_count+=1
+        for i in range(0,len(self.test_labels)):
+            if self.test_labels[i]==loan_status:
+                test_count+=1
+        return (train_count+test_count)/ (len(self.train_labels)+len(self.test_labels)), \
+               train_count/len(self.train_labels), test_count/len(self.test_labels)
+
 if __name__ == '__main__':
+    user_filename_list = os.listdir('./data/')
 
-
-    filename = './data/loan_AK.csv'
-    all_dataset = LoanDataset(filename)
-    all_dataset.SetIsTrain(True)
-    train_loader = torch.utils.data.DataLoader(all_dataset, batch_size=20, shuffle=True)
-    all_dataset.SetIsTrain(False)
-    test_loader = torch.utils.data.DataLoader(all_dataset, batch_size=1, shuffle=True)
-    #
-    # for data,label in train_loader:
-    #     print(data)
-    #     print(label)
+    with open("loan_status_percent.csv", "w") as csvfile:
+        writer = csv.writer(csvfile)
+        # 先写入columns_name
+        writer.writerow(["state_name", "all_current", "train_current","test_current"])
+        for i in range(0, len(user_filename_list)):
+            user_filename = user_filename_list[i]
+            print(user_filename)
+            state_name = user_filename[5:7]  # loan_IA.csv
+            file_path = './data/' + user_filename
+            all_dataset = LoanDataset(file_path)
+            all_per, train_per,test_per= all_dataset.getPortion(loan_status=0)
+            writer.writerow([state_name, all_per, train_per, test_per])
