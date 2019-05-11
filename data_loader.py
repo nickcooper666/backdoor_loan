@@ -34,15 +34,13 @@ class LoanDataset(data.Dataset):
         x_train, x_test, y_train, y_test = train_test_split(x_val, y_val, test_size=0.2, random_state=42)
         self.data_column_name = x_train.columns.values.tolist() # list
         self.label_column_name= x_test.columns.values.tolist()
-        self.train_data = x_train.values/10000 # numpy array
-        self.test_data = x_test.values/10000
+        self.train_data = x_train.values # numpy array
+        self.test_data = x_test.values
 
         self.train_labels = y_train.values
         self.test_labels = y_test.values
 
-        print(csv_file, "train"  , len(self.train_data),len(self.train_labels))
-        print(csv_file, "test",len(self.test_data), len(self.test_labels))
-
+        print(csv_file, "train"  , len(self.train_data),"test",len(self.test_data))
 
     def __len__(self):
         if self.train:
@@ -76,16 +74,37 @@ class LoanDataset(data.Dataset):
 
 if __name__ == '__main__':
     user_filename_list = os.listdir('./data/')
-
-    with open("loan_status_percent.csv", "w") as csvfile:
+    print(user_filename_list)
+    test_data_count=0
+    train_data_count=0
+    with open("states_data_overview.csv", "w") as csvfile:
         writer = csv.writer(csvfile)
-        # 先写入columns_name
-        writer.writerow(["state_name", "all_current", "train_current","test_current"])
+        writer.writerow(["state_name","train","test","all"])
         for i in range(0, len(user_filename_list)):
             user_filename = user_filename_list[i]
-            print(user_filename)
-            state_name = user_filename[5:7]  # loan_IA.csv
             file_path = './data/' + user_filename
+            state_name = user_filename[5:7]  # loan_IA.csv
             all_dataset = LoanDataset(file_path)
-            all_per, train_per,test_per= all_dataset.getPortion(loan_status=0)
-            writer.writerow([state_name, all_per, train_per, test_per])
+            test_data_count += len(all_dataset.test_labels)
+            train_data_count += len(all_dataset.train_labels)
+            writer.writerow([state_name, len(all_dataset.train_labels),
+                             len(all_dataset.test_labels),
+                             len(all_dataset.train_labels)+len(all_dataset.test_labels)])
+
+        writer.writerow(["all", train_data_count, test_data_count,test_data_count+train_data_count])
+
+        print("all test", test_data_count)
+        print("all train", train_data_count)
+
+    # with open("loan_status_percent.csv", "w") as csvfile:
+    #     writer = csv.writer(csvfile)
+    #     # 先写入columns_name
+    #     writer.writerow(["state_name", "all_current", "train_current","test_current"])
+    #     for i in range(0, len(user_filename_list)):
+    #         user_filename = user_filename_list[i]
+    #         print(user_filename)
+    #         state_name = user_filename[5:7]  # loan_IA.csv
+    #         file_path = './data/' + user_filename
+    #         all_dataset = LoanDataset(file_path)
+    #         all_per, train_per,test_per= all_dataset.getPortion(loan_status=0)
+    #         writer.writerow([state_name, all_per, train_per, test_per])

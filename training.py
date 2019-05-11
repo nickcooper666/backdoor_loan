@@ -41,10 +41,10 @@ posion_posiontest_result=[] #train_fileHeader
 
 
 def IsMatchPoisonConditions(data, loanHelper):
-    if data[loanHelper.feature_dict["num_accts_ever_120_pd"]] * 10000>=2.0 \
-            and data[loanHelper.feature_dict["num_actv_rev_tl"]] *10000 >= 3.0 \
-            and data[loanHelper.feature_dict["num_tl_op_past_12m"]] * 10000 >= 1.0 \
-            and data[loanHelper.feature_dict["num_bc_tl"]] *10000>= 5.0:
+    if data[loanHelper.feature_dict["num_accts_ever_120_pd"]] >=2.0 \
+            and data[loanHelper.feature_dict["num_actv_rev_tl"]]  >= 3.0 \
+            and data[loanHelper.feature_dict["num_tl_op_past_12m"]]  >= 1.0 \
+            and data[loanHelper.feature_dict["num_bc_tl"]] >= 5.0:
         return True
     else:
         return False
@@ -112,8 +112,8 @@ def train(helper, epoch, local_model, target_model, is_poison, last_weight_accum
                                                              gamma=0.1)
             # acc = acc_initial
             for internal_epoch in range(1, internal_epoch_num + 1):
-                helper.statehelper_dic[state_key].all_dataset.SetIsTrain(True)
-                poison_data = helper.statehelper_dic[state_key].poison_train_loader
+
+                poison_data = helper.statehelper_dic[state_key].get_poison_trainloader()
 
                 if step_lr:
                     scheduler.step()
@@ -218,9 +218,7 @@ def train(helper, epoch, local_model, target_model, is_poison, last_weight_accum
         else:
 
             for internal_epoch in range(1, helper.params['internal_epochs'] + 1):
-
-                helper.statehelper_dic[state_key].all_dataset.SetIsTrain(True)
-                train_data = helper.statehelper_dic[state_key].train_loader
+                train_data = helper.statehelper_dic[state_key].get_trainloader()
                 data_iterator = train_data
                 total_loss = 0.
                 correct = 0
@@ -290,20 +288,17 @@ def Mytest(helper, epoch,
     total_loss = 0
     correct = 0
     dataset_size =0
-    for state_key, state_helper  in helper.statehelper_dic.items():
-        state_helper.all_dataset.SetIsTrain(False)
-        data_source = state_helper.test_loader
-        data_iterator = data_source
+    for i in range(0,len(helper.allStateHelperList)):
+        state_helper=helper.allStateHelperList[i]
+        data_iterator = state_helper.get_testloader()
         for batch_id, batch in enumerate(data_iterator):
-            data, targets = state_helper.get_batch(data_source, batch, evaluation=True)
+            data, targets = state_helper.get_batch(data_iterator, batch, evaluation=True)
             dataset_size += len(data)
             output = model(data)
-
             total_loss += nn.functional.cross_entropy(output, targets,
                                               reduction='sum').item() # sum up batch loss
             pred = output.data.max(1)[1]  # get the index of the max log-probability
             correct += pred.eq(targets.data.view_as(pred)).cpu().sum().item()
-
 
     acc = 100.0 * (float(correct) / float(dataset_size))
     total_l = total_loss / dataset_size
@@ -327,9 +322,9 @@ def Mytest_poison(helper, epoch,
     dataset_size = 0
     poison_data_count=0
 
-    for state_key, state_helper in helper.statehelper_dic.items():
-        state_helper.all_dataset.SetIsTrain(False)
-        data_source = state_helper.test_loader
+    for i in range(0, len(helper.allStateHelperList)):
+        state_helper = helper.allStateHelperList[i]
+        data_source = state_helper.get_testloader()
         data_iterator = data_source
         state_posion_data_count = 0
         for batch_id, batch in enumerate(data_iterator):
@@ -360,18 +355,10 @@ def Mytest_poison(helper, epoch,
             output = model(data)
             total_loss += nn.functional.cross_entropy(output, targets,
                                               reduction='sum').item()  # sum up batch loss
-            # indices = torch.LongTensor(index_list).cuda()
-            # posion_output= torch.index_select(output, 0, indices)
-            # posion_target= torch.index_select(targets, 0, indices)
-            # print(posion_output)
-            # print(posion_target)
-            # print(indices)
             pred = output.data.max(1)[1]  # get the index of the max log-probability
-            # print(pred)
             correct += pred.eq(targets.data.view_as(pred)).cpu().sum().item()
 
-
-        print(state_key,state_posion_data_count)
+        # logger.info('state {}, posion_data_count{}'.format(state_helper.name, state_posion_data_count))
 
 
     acc = 100.0 * (float(correct) / float(poison_data_count))

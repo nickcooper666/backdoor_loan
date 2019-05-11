@@ -68,7 +68,6 @@ def process_train(prefixname,train_filename):
     plt.title("train_loss")
     plt.savefig(save_prefixname +"train_loss.png")
 
-    #
     # fig, (ax1, ax2) = plt.subplots(2, 1)
     #
     # acc_df.plot(ax=ax1)
@@ -325,15 +324,27 @@ if __name__ == '__main__':
 
 
     # prefixname="./saved_models/model_loan_May.09_01.49.00/"
-    prefixname = "./saved_models/model_loan_May.09_02.00.24/"
-    poison_process(prefixname)
-    prefixname = "./saved_models/model_loan_May.09_02.13.23/"
-    poison_process(prefixname)
-    prefixname = "./saved_models/model_loan_May.09_02.18.36/"
-    poison_process(prefixname)
-    prefixname = "./saved_models/model_loan_May.09_02.20.53/"
-    poison_process(prefixname)
-    prefixname = "./saved_models/model_loan_May.09_02.39.36/"
-    poison_process(prefixname)
-    prefixname = "./saved_models/model_loan_May.09_02.48.12/"
+    # prefixname = "./saved_models/model_loan_May.09_02.00.24/"
+    # poison_process(prefixname)
+    # prefixname = "./saved_models/model_loan_May.09_02.13.23/"
+    # poison_process(prefixname)
+    # prefixname = "./saved_models/model_loan_May.09_02.18.36/"
+    # poison_process(prefixname)
+    # prefixname = "./saved_models/model_loan_May.09_02.20.53/"
+    # poison_process(prefixname)
+    # prefixname = "./saved_models/model_loan_May.09_02.39.36/"
+    # poison_process(prefixname)
+    # prefixname = "./saved_models/model_loan_May.09_02.48.12/"
+    # poison_process(prefixname)
+    # prefixname = "./saved_models/model_loan_May.11_15.59.46/"
+    # process(prefixname)
+    # prefixname = "./saved_models/model_loan_May.11_16.01.50/"
+    # process(prefixname)
+
+    # prefixname = "./saved_models/model_loan_May.11_16.34.32/"
+    # poison_process(prefixname)
+
+    # prefixname = "./saved_models/model_loan_May.11_17.04.33/"
+    # poison_process(prefixname)
+    prefixname = "./saved_models/model_loan_May.11_18.49.40/"
     poison_process(prefixname)

@@ -22,6 +22,7 @@ POISONED_PARTICIPANT_POS = 0
 class StateHelper():
     def __init__(self, params):
         self.params= params
+        self.name=""
 
     def load_data(self, filename='./data/loan_IA.csv'):
         logger.info('Loading data')
@@ -38,12 +39,7 @@ class StateHelper():
         #     # splitted  per participant
         #     train_loaders = self.get_train()
 
-        self.train_loader = self.get_train()
-        self.test_loader = self.get_test()
-        self.poison_train_loader = self.poison_train_dataset() # 目前和train_loader没区别，todo
-        self.poison_test_loader = self.poison_test_dataset()
-
-    def get_train(self):
+    def get_trainloader(self):
         """
         This method is used along with Dirichlet distribution
         :param params:
@@ -59,7 +55,7 @@ class StateHelper():
         # print("get trian", count)
         return train_loader
 
-    def get_test(self):
+    def get_testloader(self):
 
         self.all_dataset.SetIsTrain(False)
         test_loader = torch.utils.data.DataLoader(self.all_dataset,
@@ -71,14 +67,14 @@ class StateHelper():
         # print("get test", count)
         return test_loader
 
-    def poison_train_dataset(self):
+    def get_poison_trainloader(self):
         self.all_dataset.SetIsTrain(True)
         # todo sampler
         return torch.utils.data.DataLoader(self.all_dataset,
                                            batch_size=self.params['batch_size'],
                                            shuffle=True)
 
-    def poison_test_dataset(self):
+    def get_poison_testloader(self):
 
         self.all_dataset.SetIsTrain(False)
         # todo sampler
@@ -139,7 +135,8 @@ class LoanHelper(Helper):
 
         self.user_list=[]
         self.statehelper_dic ={}
-        # user_filename_list=['loan_FL.csv']
+        self.allStateHelperList=[]
+
         if params_loaded['all_participants']:
             user_filename_list = os.listdir('./data/')
         else:
@@ -153,13 +150,26 @@ class LoanHelper(Helper):
             state_name = user_filename[5:7]  # loan_IA.csv
             self.user_list.append(state_name)
             file_path = './data/' + user_filename
-            current_time = datetime.datetime.now().strftime('%b.%d_%H.%M.%S')
             helper= StateHelper(params=params_loaded)
             helper.load_data(file_path)
             self.statehelper_dic[state_name]= helper
+            helper.name=state_name
+            self.allStateHelperList.append(helper)
             if i==0:
                 for j in range(0,len(helper.all_dataset.data_column_name)):
                     self.feature_dict[helper.all_dataset.data_column_name[j]]=j
+
+        all_userfilename_list = os.listdir('./data/')
+        if params_loaded['all_participants'] == False:
+            for j in range(0,len(all_userfilename_list)):
+                # to get test data set
+                if all_userfilename_list[j] not in user_filename_list:
+                    user_filename = all_userfilename_list[j]
+                    helper = StateHelper(params=params_loaded)
+                    file_path = './data/' + user_filename
+                    helper.load_data(file_path)
+                    self.allStateHelperList.append(helper)
+
         # print(self.feature_dict)
         # self.test_loader = torch.utils.data.ConcatDataset(
         #     [helper.test_loader  for _,helper in  self.statehelper_dic.items()])
